@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Space Mind</string>
+    <string name="accessibility_desc">Detects which app is open and checks the screen of non-trusted apps; blocks the app if sexual content is found. In the Settings app it only looks for the name "Space Mind" so that it cannot be turned off without the PIN. It does not read or save anything else.</string>
+</resources>
