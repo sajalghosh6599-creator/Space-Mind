@@ -1,0 +1,53 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          set -e
+          unzip -o ./*.zip -d project
+          DIR=$(dirname "$(find project -name settings.gradle.kts | head -n 1)")
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download NSFW model
+        env:
+          MODEL_URL: ${{ vars.NSFW_MODEL_URL || 'https://github.com/nexas105/flutter_nsfw_scaner/releases/download/models-v1/OpenNSFW2.tflite.zip' }}
+        run: |
+          set -e
+          mkdir -p "$PROJECT_DIR/app/src/main/assets" tmp_model
+          curl -fL --retry 3 -o tmp_model/download.bin "$MODEL_URL"
+          if unzip -tq tmp_model/download.bin >/dev/null 2>&1; then
+            unzip -o tmp_model/download.bin -d tmp_model/unzipped
+            FILE=$(find tmp_model/unzipped -name '*.tflite' | head -n 1)
+          else
+            FILE=tmp_model/download.bin
+          fi
+          [ -n "$FILE" ] || { echo "ERROR: no .tflite found"; exit 1; }
+          cp "$FILE" "$PROJECT_DIR/app/src/main/assets/nsfw.tflite"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.5"
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SpaceMind-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
