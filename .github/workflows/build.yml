@@ -25,33 +25,36 @@ jobs:
           mkdir -p app/src/main/assets
           OUT=app/src/main/assets/nsfw.tflite
           if [ -s "$OUT" ]; then
-            echo "nsfw.tflite already in repo, skipping download"
-            ls -l app/src/main/assets
+            echo "nsfw.tflite already in repo, skipping"
             exit 0
           fi
-          URLS="
-          https://github.com/devzwy/open_nsfw_android/raw/dev/app/src/main/assets/nsfw.tflite
-          https://download.fr71.com/open/nsfw.tflite
-          ${NSFW_MODEL_URL}
-          "
-          for U in $URLS; do
-            echo "Trying $U"
-            if curl -fL --retry 2 -o /tmp/model.bin "$U"; then
-              SIZE=$(stat -c%s /tmp/model.bin)
-              MAGIC=$(dd if=/tmp/model.bin bs=1 skip=4 count=4 2>/dev/null)
-              echo "size=$SIZE magic=$MAGIC"
-              if [ "$SIZE" -gt 500000 ] && [ "$MAGIC" = "TFL3" ]; then
-                cp /tmp/model.bin "$OUT"
-                echo "Model OK from $U"
-                ls -l app/src/main/assets
-                exit 0
+          check() {
+            f="$1"
+            [ -f "$f" ] || return 1
+            s=$(stat -c%s "$f")
+            m=$(dd if="$f" bs=1 skip=4 count=4 2>/dev/null)
+            [ "$s" -gt 500000 ] && [ "$m" = "TFL3" ]
+          }
+          mkdir -p /tmp/src
+          for R in devzwy/open_nsfw_android nexas105/flutter_nsfw_scaner; do
+            for B in dev master main; do
+              D=/tmp/src/$(echo "$R-$B" | tr '/' '_')
+              if git clone --depth 1 --branch "$B" "https://github.com/$R.git" "$D" 2>/dev/null; then
+                echo "Cloned $R ($B). tflite files found:"
+                find "$D" -iname '*.tflite' -exec ls -l {} \;
+                for F in $(find "$D" -iname 'nsfw.tflite'); do
+                  if check "$F"; then
+                    cp "$F" "$OUT"
+                    echo "Model OK: $F"
+                    ls -l app/src/main/assets
+                    exit 0
+                  fi
+                done
               fi
-            fi
+            done
           done
-          echo "ERROR: kono link-e valid model paoa jayni. nsfw.tflite file ta repo-r SpaceMind/app/src/main/assets e upload koro."
+          echo "ERROR: model paoa jayni. nsfw.tflite file ta SpaceMind/app/src/main/assets e upload koro."
           exit 1
-        env:
-          NSFW_MODEL_URL: ${{ vars.NSFW_MODEL_URL }}
 
       - uses: gradle/actions/setup-gradle@v4
         with:
