@@ -20,25 +20,38 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Download NSFW model
-        env:
-          MODEL_URL: ${{ vars.NSFW_MODEL_URL || 'https://github.com/nexas105/flutter_nsfw_scaner/releases/download/models-v1/OpenNSFW2.tflite.zip' }}
+      - name: Get NSFW model
         run: |
-          set -e
-          mkdir -p app/src/main/assets tmp_model
-          curl -fL --retry 3 -o tmp_model/download.bin "$MODEL_URL"
-          if unzip -tq tmp_model/download.bin >/dev/null 2>&1; then
-            unzip -o tmp_model/download.bin -d tmp_model/unzipped
-            FILE=$(find tmp_model/unzipped -name '*.tflite' | head -n 1)
-          else
-            FILE=tmp_model/download.bin
+          mkdir -p app/src/main/assets
+          OUT=app/src/main/assets/nsfw.tflite
+          if [ -s "$OUT" ]; then
+            echo "nsfw.tflite already in repo, skipping download"
+            ls -l app/src/main/assets
+            exit 0
           fi
-          if [ -z "$FILE" ]; then
-            echo "ERROR: .tflite file paoa jayni"
-            exit 1
-          fi
-          cp "$FILE" app/src/main/assets/nsfw.tflite
-          ls -l app/src/main/assets
+          URLS="
+          https://github.com/devzwy/open_nsfw_android/raw/dev/app/src/main/assets/nsfw.tflite
+          https://download.fr71.com/open/nsfw.tflite
+          ${NSFW_MODEL_URL}
+          "
+          for U in $URLS; do
+            echo "Trying $U"
+            if curl -fL --retry 2 -o /tmp/model.bin "$U"; then
+              SIZE=$(stat -c%s /tmp/model.bin)
+              MAGIC=$(dd if=/tmp/model.bin bs=1 skip=4 count=4 2>/dev/null)
+              echo "size=$SIZE magic=$MAGIC"
+              if [ "$SIZE" -gt 500000 ] && [ "$MAGIC" = "TFL3" ]; then
+                cp /tmp/model.bin "$OUT"
+                echo "Model OK from $U"
+                ls -l app/src/main/assets
+                exit 0
+              fi
+            fi
+          done
+          echo "ERROR: kono link-e valid model paoa jayni. nsfw.tflite file ta repo-r SpaceMind/app/src/main/assets e upload koro."
+          exit 1
+        env:
+          NSFW_MODEL_URL: ${{ vars.NSFW_MODEL_URL }}
 
       - uses: gradle/actions/setup-gradle@v4
         with:
